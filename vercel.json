@@ -11,9 +11,9 @@
       "destination": "/index-CLEAN.html"
     }
   ],
-  "env": {
-    "OPENROUTER_API_KEY": "@openrouter-api-key"
-  },
+ "env": {
+     "OPENROUTER_API_KEY": "@openrouter-api-key"
+   },
   "headers": [
     {
       "source": "/api/(.*)",
