@@ -710,42 +710,82 @@ function adminTab(t){
 }
 // ---- training admin editor (структурный) ----
 let tWork={}, tCurrent=null;
-function initTWork(){ tWork={}; getTraining().forEach(b=>{ tWork[b.id]={title:b.title,content:b.content,showN:b.showN,pass:b.pass,timer:b.timer,
+function initTWork(){ tWork={}; getTraining().forEach(b=>{ tWork[b.id]={order:b.order||0,title:b.title,content:b.content,showN:b.showN,pass:b.pass,timer:b.timer,
   pool:(b.pool||[]).map(q=>({q:q.q,opts:(q.opts||[]).map(o=>({t:o.t,c:!!o.c}))}))}; }); }
 function renderTrainingAdmin(){ initTWork(); const ids=getTraining().map(b=>b.id); if(!ids.includes(tCurrent)) tCurrent=ids[0]; drawTrainingAdmin(); }
 function drawTrainingAdmin(){
-  const blocks=getTraining();
-  const tabs=`<div class="filters" style="margin-bottom:14px">`+blocks.map(b=>`<button class="fchip ${b.id===tCurrent?'active':''}" onclick="selectTBlock(${b.id})">Блок ${b.id}</button>`).join("")+`<button class="fchip" style="background:var(--accent);color:var(--on-accent);font-weight:600" onclick="addNewBlock()" title="Добавить новый блок"><i class="ti ti-plus"></i> Блок</button></div>`;
+  const blocks=getTraining().sort((a,b)=>(a.order||0)-(b.order||0));
+  if(!blocks.length){ document.getElementById("training-admin").innerHTML='<div class="card"><p class="muted">Нет блоков обучения.</p><button class="btn" onclick="addNewBlock()"><i class="ti ti-plus"></i> Создать первый блок</button></div>'; return; }
+  const tabs=`<div class="filters" style="margin-bottom:14px">`+blocks.map((b,idx)=>`<div class="row" style="gap:4px"><button class="fchip ${b.id===tCurrent?'active':''}" onclick="selectTBlock(${b.id})">${esc(b.title||`Блок ${b.id}`)}</button><button class="btn ghost" style="padding:4px 6px" onclick="moveBlockUp(${b.id})" ${idx===0?'disabled':''}><i class="ti ti-arrow-up"></i></button><button class="btn ghost" style="padding:4px 6px" onclick="moveBlockDown(${b.id})" ${idx===blocks.length-1?'disabled':''}><i class="ti ti-arrow-down"></i></button><button class="btn ghost" style="padding:4px 6px;color:var(--bad)" onclick="deleteBlock(${b.id})"><i class="ti ti-trash"></i></button></div>`).join("")+`<button class="fchip" style="background:var(--accent);color:var(--on-accent);font-weight:600" onclick="addNewBlock()" title="Добавить новый блок"><i class="ti ti-plus"></i> Блок</button></div>`;
+  const w=tWork[tCurrent]; if(!w){ alert("Блок не найден"); tCurrent=blocks[0].id; return; }
   document.getElementById("training-admin").innerHTML=tabs+blockEditor(tCurrent);
 }
 function addNewBlock(){
   const blocks=getTraining();
   const newId=Math.max(...blocks.map(b=>b.id), 0)+1;
-  const newBlock={id:newId,title:`Блок ${newId}`,content:"",showN:5,pass:80,timer:150,pool:[]};
+  const maxOrder=Math.max(...blocks.map(b=>b.order||0), 0);
+  const newBlock={id:newId,order:maxOrder+1,title:`Блок ${newId}`,content:"",showN:5,pass:80,timer:150,pool:[]};
 
-  // Сохраняем в localStorage
   let newBlocks=[]; try{newBlocks=JSON.parse(localStorage.getItem("sb_training_new_blocks")||"[]")}catch(e){}
-  newBlocks.push({id:newId,title:newBlock.title,content:newBlock.content,showN:newBlock.showN,pass:newBlock.pass,timer:newBlock.timer,pool:newBlock.pool});
+  newBlocks.push({id:newId,order:maxOrder+1,title:newBlock.title,content:newBlock.content,showN:newBlock.showN,pass:newBlock.pass,timer:newBlock.timer,pool:newBlock.pool});
   localStorage.setItem("sb_training_new_blocks",JSON.stringify(newBlocks));
 
-  // Save to global data (assuming SB_TRAINING exists)
   if(window.SB_TRAINING && window.SB_TRAINING.blocks){
     window.SB_TRAINING.blocks.push(newBlock);
   }
 
-  tWork[newId]={title:newBlock.title,content:newBlock.content,showN:newBlock.showN,pass:newBlock.pass,timer:newBlock.timer,pool:newBlock.pool};
+  tWork[newId]={order:maxOrder+1,title:newBlock.title,content:newBlock.content,showN:newBlock.showN,pass:newBlock.pass,timer:newBlock.timer,pool:newBlock.pool};
   tCurrent=newId;
   drawTrainingAdmin();
   alert(`✅ Блок ${newId} создан! Заполни название и содержимое.`);
 }
-function selectTBlock(id){ tCurrent=id; drawTrainingAdmin(); }
+function selectTBlock(id){ const w=tWork[id]; if(!w){ alert("Блок не найден"); return; } tCurrent=id; drawTrainingAdmin(); }
+function deleteBlock(id){
+  if(!confirm(`Удалить блок "${tWork[id]?.title||'без названия'}"? Это нельзя отменить.`)) return;
+  const blocks=getTraining();
+  let newBlocks=[]; try{newBlocks=JSON.parse(localStorage.getItem("sb_training_new_blocks")||"[]")}catch(e){}
+  newBlocks=newBlocks.filter(b=>b.id!==id);
+  localStorage.setItem("sb_training_new_blocks",JSON.stringify(newBlocks));
+  let edits={}; try{edits=JSON.parse(localStorage.getItem("sb_training")||"{}")}catch(e){}
+  delete edits[id];
+  localStorage.setItem("sb_training",JSON.stringify(edits));
+  delete tWork[id];
+  const remaining=blocks.filter(b=>b.id!==id);
+  tCurrent=remaining[0]?.id||null;
+  drawTrainingAdmin();
+}
+function moveBlockUp(id){
+  const blocks=getTraining().sort((a,b)=>(a.order||0)-(b.order||0));
+  const idx=blocks.findIndex(b=>b.id===id);
+  if(idx<=0) return;
+  const swapOrder=(blocks[idx-1].order||0);
+  blocks[idx-1].order=(blocks[idx].order||0);
+  blocks[idx].order=swapOrder;
+  saveBlockOrder(blocks);
+  drawTrainingAdmin();
+}
+function moveBlockDown(id){
+  const blocks=getTraining().sort((a,b)=>(a.order||0)-(b.order||0));
+  const idx=blocks.findIndex(b=>b.id===id);
+  if(idx<0||idx>=blocks.length-1) return;
+  const swapOrder=(blocks[idx+1].order||0);
+  blocks[idx+1].order=(blocks[idx].order||0);
+  blocks[idx].order=swapOrder;
+  saveBlockOrder(blocks);
+  drawTrainingAdmin();
+}
+function saveBlockOrder(blocks){
+  let newBlocks=[]; try{newBlocks=JSON.parse(localStorage.getItem("sb_training_new_blocks")||"[]")}catch(e){}
+  newBlocks.forEach(nb=>{ const b=blocks.find(x=>x.id===nb.id); if(b) nb.order=b.order; });
+  localStorage.setItem("sb_training_new_blocks",JSON.stringify(newBlocks));
+}
 function blockEditor(id){
-  const w=tWork[id];
+  const w=tWork[id]; if(!w) return '<div class="card"><p class="err">Ошибка: блок не найден</p></div>';
   const qs=w.pool.map((q,qi)=>questionEditor(id,qi,q)).join("");
   return `<div class="card">
     <div class="between"><h2 style="margin:0">${esc(w.title)}</h2><span id="tb-msg-${id}" class="muted sm" style="color:var(--good)"></span></div>
-    <p class="label" style="margin-top:8px">Название</p>
-    <input value="${escA(w.title)}" oninput="tWork[${id}].title=this.value">
+    <p class="label" style="margin-top:8px">Название блока</p>
+    <div class="row" style="gap:8px"><input value="${escA(w.title)}" oninput="tWork[${id}].title=this.value" placeholder="Название блока"><button class="btn sec" style="padding:8px 12px" onclick="if(tWork[${id}].title.trim()){saveBlock(${id})}else{alert('Название не может быть пусто')}"  ><i class="ti ti-check"></i> Переименовать</button></div>
     <p class="label" style="margin-top:10px">Учебный текст</p>
     <div class="row" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">
       <button class="btn sec" style="padding:6px 11px" onclick="mdIns(${id},'h')">Заголовок</button>
@@ -1886,12 +1926,11 @@ function getTraining(){
   let newBlocks=[]; try{newBlocks=JSON.parse(localStorage.getItem("sb_training_new_blocks")||"[]")}catch(e){}
   const base=(window.SB_TRAINING&&SB_TRAINING.blocks)?SB_TRAINING.blocks:[];
 
-  // Объединяем базовые блоки с новыми
   const allBlocks=[...base,...newBlocks];
 
   return allBlocks.map(b=>{ const e=edits[b.id]||{}; const showN=e.showN??b.showN;
-    return {id:b.id,title:e.title??b.title,content:e.content??b.content,showN:showN,pass:e.pass??b.pass,
-      timer:e.timer??b.timer??(showN*30),pool:e.pool??b.pool}; });
+    return {id:b.id,order:b.order||0,title:e.title??b.title,content:e.content??b.content,showN:showN,pass:e.pass??b.pass,
+      timer:e.timer??b.timer??(showN*30),pool:e.pool??b.pool}; }).sort((a,b)=>(a.order||0)-(b.order||0));
 }
 function saveTrainingEdit(id,patch){
   let edits={}; try{edits=JSON.parse(localStorage.getItem("sb_training")||"{}")}catch(e){}
