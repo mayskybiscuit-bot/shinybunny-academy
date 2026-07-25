@@ -1926,9 +1926,13 @@ function getTraining(){
 
   const allBlocks=[...base,...newBlocks];
 
-  return allBlocks.map(b=>{ const e=edits[b.id]||{}; const showN=e.showN??b.showN;
-    return {id:b.id,order:b.order||0,title:e.title??b.title,content:e.content??b.content,showN:showN,pass:e.pass??b.pass,
-      timer:e.timer??b.timer??(showN*30),pool:e.pool??b.pool}; }).sort((a,b)=>(a.order||0)-(b.order||0));
+  return allBlocks.map(b=>{
+    const e=edits[b.id]||{};
+    const showN=e.showN??b.showN;
+    const order=e.order!==undefined?e.order:(b.order||0);
+    return {id:b.id,order:order,title:e.title??b.title,content:e.content??b.content,showN:showN,pass:e.pass??b.pass,
+      timer:e.timer??b.timer??(showN*30),pool:e.pool??b.pool};
+  }).sort((a,b)=>(a.order||0)-(b.order||0));
 }
 function saveTrainingEdit(id,patch){
   let edits={}; try{edits=JSON.parse(localStorage.getItem("sb_training")||"{}")}catch(e){}
