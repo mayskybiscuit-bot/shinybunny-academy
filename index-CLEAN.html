@@ -1017,6 +1017,8 @@ function doLogin(){
     console.log("doLogin: tag="+tag+", loginMode="+loginMode);
     if(loginMode==="training"){
       console.log("Entering training mode for "+tag);
+      const rec=loadAccess().find(x=>x.tag===tag);
+      if(!rec){ err.innerHTML='<div class="err">Доступ не выдан. Обратись к администратору.</div>'; return; }
       startTraining(tag);
       return;
     }
